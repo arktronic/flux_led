@@ -47,6 +47,11 @@ try:
 	webcolors_available = True
 except:
 	webcolors_available = False
+try:
+	import netifaces
+	netifaces_available = True
+except:
+	netifaces_available = False
 
 class utils:
 	@staticmethod
@@ -165,6 +170,21 @@ class utils:
 			percent = 0
 		return int((percent * 255)/100)
 	
+	@staticmethod
+	def get_broadcast_addresses():
+		global netifaces_available
+		bcast_list = []
+		if netifaces_available:
+			all_ifaddresses = [netifaces.ifaddresses(iface) for iface in netifaces.interfaces()]
+			all_inets = [ifaddr[netifaces.AF_INET] for ifaddr in all_ifaddresses if netifaces.AF_INET in ifaddr]
+			for if_inet in all_inets:
+				for inet_entry in if_inet:
+					if 'broadcast' in inet_entry and inet_entry['broadcast'] not in bcast_list:
+						bcast_list.append(inet_entry['broadcast'])
+		if not bcast_list:
+			bcast_list.append('<broadcast>')
+		return bcast_list
+
 class PresetPattern:
 	seven_color_cross_fade =   0x25
 	red_gradual_change =       0x26
@@ -756,7 +776,11 @@ class  BulbScanner():
 			if time.time() > quit_time:
 				break			
 			# send out a broadcast query
-			sock.sendto(msg, ('<broadcast>', DISCOVERY_PORT))
+			for bcast_addr in utils.get_broadcast_addresses():
+				try:
+					sock.sendto(msg, (bcast_addr, DISCOVERY_PORT))
+				except Exception as e:
+					print "Failed to scan on network {}: {}".format(bcast_addr, e.strerror)
 			
 			# inner loop waiting for responses
 			while True:
